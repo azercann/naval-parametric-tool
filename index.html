@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Naval Parametric Analysis Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { margin-bottom: 8px; }
+    p.lead { color: #475569; margin-top: 0; }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 24px 0;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      border: 1px solid #cbd5e1;
+      background: white;
+      border-radius: 12px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .tab-btn.active {
+      background: #0f172a;
+      color: white;
+      border-color: #0f172a;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+    .grid-4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+    .card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+      margin-bottom: 18px;
+    }
+    .card h2, .card h3 { margin-top: 0; }
+    label {
+      display: block;
+      font-size: 13px;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 14px;
+      background: #fff;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .primary { background: #0f172a; color: white; }
+    .secondary { background: white; color: #0f172a; border: 1px solid #cbd5e1; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .summary-item {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .summary-item .label { font-size: 13px; color: #64748b; }
+    .summary-item .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    .speed-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 1100px;
+    }
+    th, td {
+      border-bottom: 1px solid #e2e8f0;
+      padding: 10px 8px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th { background: #f8fafc; }
+    .table-wrap { overflow-x: auto; }
+    .service-row { background: #fef2f2; font-weight: 700; }
+    .chart-box {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 18px;
+      min-height: 420px;
+    }
+    canvas { width: 100% !important; height: 320px !important; }
+    .muted { color: #64748b; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Naval Parametric Analysis Tool</h1>
+    <p class="lead">Değerleri gir, hesapla butonuna bas ve tablo ile grafiklerin otomatik oluşmasını izle.</p>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="openTab('typeA', this)">Type A</button>
+      <button class="tab-btn" onclick="openTab('typeB', this)">Type B</button>
+      <button class="tab-btn" onclick="openTab('comparison', this)">Comparison</button>
+    </div>
+
+    <div id="typeA" class="tab-content active"></div>
+    <div id="typeB" class="tab-content"></div>
+    <div id="comparison" class="tab-content"></div>
+  </div>
+
+  <script>
+    const defaultTypeA = {
+      name: 'Type A', LWL: 60, B: 7.6, T: 2.2, displacement_t: 550,
+      Cb: 0.48, Cp: 0.58, Cm: 0.98, Cw: 0.78,
+      rho: 1025, nu: 0.00000119, g: 9.81, etaT: 0.6,
+      sfc_g_kwh: 200, fuel_t: 75, Vservice: 45, Vmax: 52,
+      speed_knots: [30, 34, 38, 42, 45, 48, 52]
+    };
+
+    const defaultTypeB = {
+      name: 'Type B', LWL: 90, B: 12.4, T: 3.8, displacement_t: 2200,
+      Cb: 0.58, Cp: 0.62, Cm: 0.98, Cw: 0.82,
+      rho: 1025, nu: 0.00000119, g: 9.81, etaT: 0.6,
+      sfc_g_kwh: 200, fuel_t: 320, Vservice: 30, Vmax: 36,
+      speed_knots: [18, 21, 24, 27, 30, 33, 36]
+    };
+
+    let draftA = JSON.parse(JSON.stringify(defaultTypeA));
+    let draftB = JSON.parse(JSON.stringify(defaultTypeB));
+    let calcA = JSON.parse(JSON.stringify(defaultTypeA));
+    let calcB = JSON.parse(JSON.stringify(defaultTypeB));
+
+    let charts = {};
+
+    function openTab(id, btn) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    function round(value, digits = 3) {
+      if (!Number.isFinite(value)) return '';
+      return Number(value.toFixed(digits));
+    }
+
+    function calculateRows(params) {
+      const S = params.LWL * (2 * params.T + params.B) * Math.sqrt(params.Cm) * (
+        0.453 + 0.4425 * params.Cb - 0.2862 * params.Cm - 0.003467 * (params.B / params.T) + 0.3696 * params.Cw
+      );
+
+      return params.speed_knots.map(Vkn => {
+        const Vmps = Vkn * 0.514444;
+        const Re = (Vmps * params.LWL) / params.nu;
+        const Cf = 0.075 / Math.pow(Math.log10(Re) - 2, 2);
+        const Rf = 0.5 * params.rho * Math.pow(Vmps, 2) * S * Cf;
+        const onePlusK = 1.15;
+        const Rv = Rf * onePlusK;
+        const Fn = Vmps / Math.sqrt(params.g * params.LWL);
+        const Rw = params.Cw * Rv * Math.pow(Fn, 3);
+        const Rt = Rv + Rw;
+        const EHP = Rt * Vmps;
+        const SHP = EHP / params.etaT;
+        const SHP_MW = SHP / 1000000;
+        const mf_tph = (((params.sfc_g_kwh / 1000) * (SHP / 1000)) / 1000);
+        const range_nm = (params.fuel_t / mf_tph) * Vkn;
+
+        return {
+          Vkn: round(Vkn, 0),
+          Vmps: round(Vmps, 5),
+          Re: round(Re, 0),
+          Cf: round(Cf, 8),
+          S: round(S, 6),
+          Rf: round(Rf, 4),
+          onePlusK: round(onePlusK, 2),
+          Rv: round(Rv, 4),
+          Fn: round(Fn, 8),
+          Rw: round(Rw, 4),
+          Rt: round(Rt, 4),
+          EHP: round(EHP, 3),
+          SHP: round(SHP, 3),
+          mf_tph: round(mf_tph, 8),
+          range_nm: round(range_nm, 6),
+          SHP_MW: round(SHP_MW, 8),
+          isService: Number(Vkn) === Number(params.Vservice)
+        };
+      });
+    }
+
+    function renderPlatform(containerId, draft, calc, typeKey) {
+      const rows = calculateRows(calc);
+      const serviceRow = rows.find(r => Number(r.Vkn) === Number(calc.Vservice));
+      const maxRow = rows.find(r => Number(r.Vkn) === Number(calc.Vmax)) || rows[rows.length - 1];
+
+      const fieldDefs = [
+        ['LWL', 'LWL'], ['B', 'B'], ['T', 'T'], ['Δ (ton)', 'displacement_t'],
+        ['Cb', 'Cb'], ['Cp', 'Cp'], ['Cm', 'Cm'], ['Cw', 'Cw'],
+        ['ρ (kg/m³)', 'rho'], ['ν (m²/s)', 'nu'], ['g', 'g'], ['ηT', 'etaT'],
+        ['SFC (g/kWh)', 'sfc_g_kwh'], ['Fuel (ton)', 'fuel_t'], ['V service (kn)', 'Vservice'], ['V max (kn)', 'Vmax']
+      ];
+
+      const fieldsHtml = fieldDefs.map(([label, key]) => `
+        <div>
+          <label>${label}</label>
+          <input type="number" step="any" value="${draft[key]}" oninput="updateField('${typeKey}','${key}', this.value)">
+        </div>
+      `).join('');
+
+      const speedHtml = draft.speed_knots.map((v, i) => `
+        <div>
+          <label>Hız ${i + 1}</label>
+          <input type="number" step="any" value="${v}" oninput="updateSpeed('${typeKey}', ${i}, this.value)">
+        </div>
+      `).join('');
+
+      const rowsHtml = rows.map(r => `
+        <tr class="${r.isService ? 'service-row' : ''}">
+          <td>${r.Vkn}</td><td>${r.Vmps}</td><td>${r.Re}</td><td>${r.Cf}</td><td>${r.S}</td>
+          <td>${r.Rf}</td><td>${r.onePlusK}</td><td>${r.Rv}</td><td>${r.Fn}</td><td>${r.Rw}</td>
+          <td>${r.Rt}</td><td>${r.EHP}</td><td>${r.SHP}</td><td>${r.mf_tph}</td><td>${r.range_nm}</td><td>${r.SHP_MW}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById(containerId).innerHTML = `
+        <div class="summary">
+          <div class="summary-item"><div class="label">Servis Hızı</div><div class="value">${calc.Vservice} kn</div></div>
+          <div class="summary-item"><div class="label">Maksimum Hız</div><div class="value">${calc.Vmax} kn</div></div>
+          <div class="summary-item"><div class="label">Servis Hızında SHP</div><div class="value">${serviceRow ? serviceRow.SHP_MW : '-'} MW</div></div>
+          <div class="summary-item"><div class="label">Servis Hızında Menzil</div><div class="value">${serviceRow ? serviceRow.range_nm : '-'} nm</div></div>
+          <div class="summary-item"><div class="label">Maks Hızda SHP</div><div class="value">${maxRow ? maxRow.SHP_MW : '-'} MW</div></div>
+          <div class="summary-item"><div class="label">Maks Hızda Menzil</div><div class="value">${maxRow ? maxRow.range_nm : '-'} nm</div></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h2>${calc.name} – Girdi Alanları</h2>
+            <div class="actions">
+              <button class="secondary" onclick="resetType('${typeKey}')">Sıfırla</button>
+              <button class="primary" onclick="calculateType('${typeKey}')">Hesapla</button>
+            </div>
+          </div>
+          <div class="grid grid-4">${fieldsHtml}</div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3>Hız Değerleri (knots)</h3>
+            <div class="actions">
+              <button class="secondary" onclick="addSpeed('${typeKey}')">Hız Ekle</button>
+            </div>
+          </div>
+          <div class="speed-list">${speedHtml}</div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="chart-box">
+            <h3>Speed – Shaft Power</h3>
+            <canvas id="${typeKey}-shp-chart"></canvas>
+          </div>
+          <div class="chart-box">
+            <h3>Speed – Range</h3>
+            <canvas id="${typeKey}-range-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3>Sonuç Tablosu</h3>
+            <button class="secondary" onclick="downloadCsv('${typeKey}')">CSV İndir</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>V(kn)</th><th>V(m/s)</th><th>Re</th><th>Cf</th><th>S</th><th>Rf</th><th>(1+k)</th><th>Rv</th><th>Fn</th><th>Rw</th><th>Rt</th><th>EHP</th><th>SHP</th><th>mf(ton/h)</th><th>Range</th><th>SHP(MW)</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      createLineChart(`${typeKey}-shp-chart`, rows.map(r => r.Vkn), rows.map(r => r.SHP_MW), 'Shaft Power (MW)', '#2563eb', calc.Vservice);
+      createLineChart(`${typeKey}-range-chart`, rows.map(r => r.Vkn), rows.map(r => r.range_nm), 'Range (nm)', '#0f766e', calc.Vservice);
+    }
+
+    function createLineChart(canvasId, labels, data, yLabel, color, serviceX = null) {
+      if (charts[canvasId]) charts[canvasId].destroy();
+      const ctx = document.getElementById(canvasId);
+      charts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: yLabel,
+              data,
+              borderColor: color,
+              backgroundColor: color,
+              tension: 0.25,
+              fill: false,
+              pointRadius: 4,
+              pointHoverRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            x: { title: { display: true, text: 'Speed (knots)' } },
+            y: { title: { display: true, text: yLabel } }
+          }
+        }
+      });
+    }
+
+    function renderComparison() {
+      const rowsA = calculateRows(calcA);
+      const rowsB = calculateRows(calcB);
+      const allSpeeds = [...new Set([...rowsA.map(r => r.Vkn), ...rowsB.map(r => r.Vkn)])].sort((a, b) => a - b);
+
+      const shpA = allSpeeds.map(s => (rowsA.find(r => r.Vkn === s) || {}).SHP_MW ?? null);
+      const shpB = allSpeeds.map(s => (rowsB.find(r => r.Vkn === s) || {}).SHP_MW ?? null);
+      const rangeA = allSpeeds.map(s => (rowsA.find(r => r.Vkn === s) || {}).range_nm ?? null);
+      const rangeB = allSpeeds.map(s => (rowsB.find(r => r.Vkn === s) || {}).range_nm ?? null);
+
+      document.getElementById('comparison').innerHTML = `
+        <div class="grid grid-2">
+          <div class="chart-box">
+            <h3>Comparison of Speed – Shaft Power Characteristics</h3>
+            <canvas id="comparison-shp"></canvas>
+          </div>
+          <div class="chart-box">
+            <h3>Comparison of Speed – Range Characteristics</h3>
+            <canvas id="comparison-range"></canvas>
+          </div>
+        </div>
+        <p class="muted">Kırmızı çizgi Type A, mavi çizgi Type B verilerini gösterir.</p>
+      `;
+
+      if (charts['comparison-shp']) charts['comparison-shp'].destroy();
+      if (charts['comparison-range']) charts['comparison-range'].destroy();
+
+      charts['comparison-shp'] = new Chart(document.getElementById('comparison-shp'), {
+        type: 'line',
+        data: {
+          labels: allSpeeds,
+          datasets: [
+            { label: 'Type A', data: shpA, borderColor: '#ef4444', backgroundColor: '#ef4444', tension: 0.25, pointRadius: 4 },
+            { label: 'Type B', data: shpB, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.25, pointRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: 'Speed (knots)' } },
+            y: { title: { display: true, text: 'Shaft Power (MW)' } }
+          }
+        }
+      });
+
+      charts['comparison-range'] = new Chart(document.getElementById('comparison-range'), {
+        type: 'line',
+        data: {
+          labels: allSpeeds,
+          datasets: [
+            { label: 'Type A', data: rangeA, borderColor: '#ef4444', backgroundColor: '#ef4444', tension: 0.25, pointRadius: 4 },
+            { label: 'Type B', data: rangeB, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.25, pointRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: 'Speed (knots)' } },
+            y: { title: { display: true, text: 'Range (nm)' } }
+          }
+        }
+      });
+    }
+
+    function updateField(type, key, value) {
+      if (type === 'A') draftA[key] = Number(value);
+      else draftB[key] = Number(value);
+    }
+
+    function updateSpeed(type, index, value) {
+      if (type === 'A') draftA.speed_knots[index] = Number(value);
+      else draftB.speed_knots[index] = Number(value);
+    }
+
+    function addSpeed(type) {
+      if (type === 'A') {
+        const last = draftA.speed_knots[draftA.speed_knots.length - 1] || 0;
+        draftA.speed_knots.push(last + 2);
+        renderAll();
+      } else {
+        const last = draftB.speed_knots[draftB.speed_knots.length - 1] || 0;
+        draftB.speed_knots.push(last + 2);
+        renderAll();
+      }
+    }
+
+    function calculateType(type) {
+      if (type === 'A') calcA = JSON.parse(JSON.stringify(draftA));
+      else calcB = JSON.parse(JSON.stringify(draftB));
+      renderAll();
+    }
+
+    function resetType(type) {
+      if (type === 'A') {
+        draftA = JSON.parse(JSON.stringify(defaultTypeA));
+        calcA = JSON.parse(JSON.stringify(defaultTypeA));
+      } else {
+        draftB = JSON.parse(JSON.stringify(defaultTypeB));
+        calcB = JSON.parse(JSON.stringify(defaultTypeB));
+      }
+      renderAll();
+    }
+
+    function downloadCsv(type) {
+      const params = type === 'A' ? calcA : calcB;
+      const rows = calculateRows(params);
+      const header = ['V(kn)', 'V(m/s)', 'Re', 'Cf', 'S', 'Rf', '(1+k)', 'Rv', 'Fn', 'Rw', 'Rt', 'EHP', 'SHP', 'mf(ton/h)', 'Range', 'SHP(MW)'];
+      const csvRows = rows.map(r => [r.Vkn, r.Vmps, r.Re, r.Cf, r.S, r.Rf, r.onePlusK, r.Rv, r.Fn, r.Rw, r.Rt, r.EHP, r.SHP, r.mf_tph, r.range_nm, r.SHP_MW]);
+      const csv = [header, ...csvRows].map(line => line.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${params.name.toLowerCase().replace(/\s+/g, '_')}_results.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderAll() {
+      renderPlatform('typeA', draftA, calcA, 'A');
+      renderPlatform('typeB', draftB, calcB, 'B');
+      renderComparison();
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
